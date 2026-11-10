@@ -1,3 +1,16 @@
+> [!IMPORTANT]
+> **This is an unofficial personal fork of [glzr-io/glazewm](https://github.com/glzr-io/glazewm).** It is not affiliated with or endorsed by the GlazeWM project.
+>
+> Changes in this fork (since November 2026):
+>
+> - A sway-style **tabbed layout**: `set-tiling-layout <tiles|tabbed>` and `toggle-tiling-layout` commands, with a configurable `tab_bar`. See `resources/assets/sample-config.yaml`.
+>
+> Branches: `fork` (default) is what gets built and released, `feat/tabbed-layout` holds only the feature commit, and `main` mirrors upstream unchanged. [Releases](../../releases) are unsigned x64 portable zips built by `.github/workflows/fork-release.yaml`, with UIAccess off. Upstream's own workflows are not run here.
+>
+> The changes were written with Claude (an AI model) and reviewed and tested by me. Please report problems with this fork here, not to the upstream project.
+>
+> GlazeWM is licensed under GPL-3.0 (see [LICENSE.md](LICENSE.md)); this fork keeps that license.
+
 <div align="center">
 
 > V3 is finally out - check out the changelog [here](https://github.com/glzr-io/GlazeWM/releases) 🔥
