@@ -1,0 +1,110 @@
+# Fork-only workflow, not part of upstream GlazeWM.
+#
+# Pushing a tag like `v3.10.1-tabs.1` (upstream version + fork build number)
+# builds unsigned x64 binaries and publishes them as a GitHub Release with a
+# portable zip and a SHA256SUMS file. Running it by hand only builds and
+# uploads the zip as a workflow artifact.
+#
+# UIAccess is off: Windows only honours it for signed executables.
+name: Fork release
+
+on:
+  push:
+    tags:
+      - 'v*-tabs.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-tabs\.([0-9]+)$ ]]; then
+              echo "::error::Tag '$GITHUB_REF_NAME' must look like v3.10.1-tabs.1"
+              exit 1
+            fi
+            RELEASE="${GITHUB_REF_NAME#v}"
+            # The build scripts read the first three dot-separated numbers
+            # into the exe file version, so keep `-tabs` out of that part.
+            VERSION_NUMBER="${BASH_REMATCH[1]}.tabs.${BASH_REMATCH[2]}"
+          else
+            RELEASE="0.0.0-tabs.dev-${GITHUB_SHA::8}"
+            VERSION_NUMBER="0.0.0.tabs.dev"
+          fi
+          echo "RELEASE=$RELEASE" >> "$GITHUB_ENV"
+          echo "VERSION_NUMBER=$VERSION_NUMBER" >> "$GITHUB_ENV"
+          echo "PACKAGE=glazewm-tabs-$RELEASE-x64" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17
+        with:
+          targets: ${{ env.TARGET }}
+          toolchain: nightly
+
+      - uses: swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
+        with:
+          shared-key: ${{ env.TARGET }}-${{ hashFiles('Cargo.lock') }}
+
+      # `--workspace` includes `wm-watcher`. No `ui_access` feature (see above).
+      - name: Build
+        shell: bash
+        run: cargo build --locked --release --target "$TARGET" --workspace
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p "dist/$PACKAGE"
+          cp target/$TARGET/release/glazewm{,-cli,-watcher}.exe "dist/$PACKAGE/"
+          cp LICENSE.md "dist/$PACKAGE/"
+          cat > "dist/$PACKAGE/SOURCE.txt" <<EOF
+          Unofficial build of a personal GlazeWM fork, not affiliated with glzr-io.
+          Version: $RELEASE (unsigned, x64, UIAccess off)
+          Source:  $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_SHA
+          Upstream: https://github.com/glzr-io/glazewm
+          License: GPL-3.0, see LICENSE.md
+          EOF
+          cd dist
+          7z a -tzip "$PACKAGE.zip" "$PACKAGE" > /dev/null
+          sha256sum "$PACKAGE.zip" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.PACKAGE }}
+          if-no-files-found: error
+          path: dist/${{ env.PACKAGE }}.zip
+
+      - name: Create release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<EOF
+          Unofficial build of this personal fork of [glzr-io/glazewm](https://github.com/glzr-io/glazewm), built from $GITHUB_SHA.
+
+          - Unsigned x64 binaries. SmartScreen may warn when the zip is downloaded in a browser.
+          - UIAccess is off, so elevated (admin) windows are not managed.
+          - Portable zip: \`glazewm.exe\`, \`glazewm-cli.exe\` and \`glazewm-watcher.exe\` must stay in the same folder.
+          - Verify the download with \`SHA256SUMS\`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --latest \
+            "dist/$PACKAGE.zip" \
+            dist/SHA256SUMS
