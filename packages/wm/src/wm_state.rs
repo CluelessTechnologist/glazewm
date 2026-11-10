@@ -6,7 +6,7 @@ use tracing::warn;
 use uuid::Uuid;
 use wm_common::{BindingModeConfig, HideCorner, WindowState, WmEvent};
 use wm_platform::{
-  Direction, Dispatcher, Display, NativeWindow, Point, Rect,
+  Direction, Dispatcher, Display, NativeWindow, Point, Rect, TabBarEvent,
 };
 #[cfg(target_os = "windows")]
 use wm_platform::{NativeWindowWindowsExt, OpacityValue};
@@ -23,6 +23,7 @@ use crate::{
     WindowContainer, Workspace, WorkspaceTarget,
   },
   pending_sync::PendingSync,
+  tab_bars::TabBars,
   traits::{CommonGetters, PositionGetters, WindowGetters},
   user_config::UserConfig,
 };
@@ -67,6 +68,9 @@ pub struct WmState {
   /// Whether the OS focused window is the same as the WM focused window.
   pub is_focus_synced: bool,
 
+  /// Tab bars of containers with the tabbed layout.
+  pub tab_bars: TabBars,
+
   /// Whether the initial state has been populated.
   has_initialized: bool,
 
@@ -82,6 +86,7 @@ impl WmState {
     dispatcher: Dispatcher,
     event_tx: mpsc::UnboundedSender<WmEvent>,
     exit_tx: mpsc::UnboundedSender<()>,
+    tab_bar_event_tx: mpsc::UnboundedSender<TabBarEvent>,
   ) -> Self {
     Self {
       root_container: RootContainer::new(),
@@ -94,6 +99,7 @@ impl WmState {
       ignored_windows: Vec::new(),
       is_paused: false,
       is_focus_synced: false,
+      tab_bars: TabBars::new(tab_bar_event_tx),
       has_initialized: false,
       event_tx,
       exit_tx,

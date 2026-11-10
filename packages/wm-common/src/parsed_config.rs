@@ -13,6 +13,7 @@ pub struct ParsedConfig {
   pub gaps: GapsConfig,
   pub general: GeneralConfig,
   pub keybindings: Vec<KeybindingConfig>,
+  pub tab_bar: TabBarConfig,
   pub window_behavior: WindowBehaviorConfig,
   pub window_effects: WindowEffectsConfig,
   pub window_rules: Vec<WindowRuleConfig>,
@@ -49,6 +50,9 @@ pub struct GapsConfig {
   /// Gap between window and the screen edge if there is only one window
   /// in the workspace
   pub single_window_outer_gap: Option<RectDelta>,
+
+  /// Height of the tab bar shown above containers with the tabbed layout.
+  pub tab_bar_height: LengthValue,
 }
 
 impl Default for GapsConfig {
@@ -63,6 +67,7 @@ impl Default for GapsConfig {
         LengthValue::from_px(0),
       ),
       single_window_outer_gap: None,
+      tab_bar_height: LengthValue::from_px(24),
     }
   }
 }
@@ -224,6 +229,78 @@ impl Default for FullscreenStateConfig {
     FullscreenStateConfig {
       maximized: true,
       shown_on_top: false,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all(serialize = "camelCase"))]
+pub struct TabBarConfig {
+  /// Font family of the tab titles.
+  pub font_family: String,
+
+  /// Font size of the tab titles.
+  pub font_size: LengthValue,
+
+  /// Colors of the active tab in the focused container.
+  pub focused: TabColorsConfig,
+
+  /// Colors of the active tab in a container that doesn't have focus.
+  pub focused_inactive: TabColorsConfig,
+
+  /// Colors of tabs that aren't active.
+  pub unfocused: TabColorsConfig,
+}
+
+impl Default for TabBarConfig {
+  fn default() -> Self {
+    // Defaults match the default client colors of Sway/i3.
+    TabBarConfig {
+      font_family: "Segoe UI".to_string(),
+      font_size: LengthValue::from_px(13),
+      focused: TabColorsConfig::from_hex("#285577", "#4c7899", "#ffffff"),
+      focused_inactive: TabColorsConfig::from_hex(
+        "#5f676a", "#333333", "#ffffff",
+      ),
+      unfocused: TabColorsConfig::from_hex(
+        "#222222", "#333333", "#888888",
+      ),
+    }
+  }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all(serialize = "camelCase"))]
+pub struct TabColorsConfig {
+  /// Background color of the tab.
+  pub background: Color,
+
+  /// Color of the tab's 1px border.
+  pub border: Color,
+
+  /// Color of the tab's title.
+  pub text: Color,
+}
+
+impl TabColorsConfig {
+  /// Creates tab colors from hex strings.
+  ///
+  /// Hex strings are expected to be valid, so this is only intended for
+  /// hardcoded defaults.
+  fn from_hex(background: &str, border: &str, text: &str) -> Self {
+    let parse = |hex: &str| {
+      hex.parse::<Color>().unwrap_or(Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+      })
+    };
+
+    Self {
+      background: parse(background),
+      border: parse(border),
+      text: parse(text),
     }
   }
 }

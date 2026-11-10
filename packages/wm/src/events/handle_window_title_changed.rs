@@ -23,6 +23,9 @@ pub fn handle_window_title_changed(
       properties.title = title;
     });
 
+    // Tab titles are derived from window titles.
+    state.pending_sync.queue_tab_bar_update();
+
     // Run window rules for title change events.
     run_window_rules(
       window,

@@ -40,6 +40,7 @@ mod ipc_server;
 mod models;
 mod pending_sync;
 mod sys_tray;
+mod tab_bars;
 mod traits;
 mod user_config;
 mod wm;
@@ -213,6 +214,10 @@ async fn start_wm(
       Some(event) = keybinding_listener.next_event() => {
         tracing::debug!("Received keyboard event: {:?}", event);
         wm.process_event(PlatformEvent::Keybinding(event), &mut config)
+      }
+      Some(event) = wm.tab_bar_event_rx.recv() => {
+        tracing::debug!("Received tab bar event: {:?}", event);
+        wm.process_tab_bar_event(&event, &mut config)
       }
       _ = cleanup_interval.tick() => {
         if wm.state.is_paused {

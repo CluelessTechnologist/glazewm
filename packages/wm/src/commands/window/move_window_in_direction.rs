@@ -1,5 +1,5 @@
 use anyhow::Context;
-use wm_common::{TilingDirection, WindowState};
+use wm_common::{TilingDirection, TilingLayout, WindowState};
 use wm_platform::{Direction, Rect};
 
 use crate::{
@@ -300,6 +300,10 @@ fn invert_workspace_tiling_direction(
       config.value.gaps.clone(),
     );
 
+    // Keep the remaining windows in the workspace's layout (e.g. moving a
+    // window down from a tabbed workspace results in V[T[1 2] 3]).
+    split_container.set_tiling_layout(workspace.tiling_layout());
+
     wrap_in_split_container(
       &split_container,
       &workspace.clone().into(),
@@ -307,8 +311,10 @@ fn invert_workspace_tiling_direction(
     )?;
   }
 
-  // Invert the tiling direction of the workspace.
+  // Invert the tiling direction of the workspace. A tabbed workspace is
+  // always horizontal, so it's switched to the tiles layout.
   workspace.set_tiling_direction(workspace.tiling_direction().inverse());
+  workspace.set_tiling_layout(TilingLayout::Tiles);
 
   let target_index = match direction {
     Direction::Left | Direction::Up => 0,

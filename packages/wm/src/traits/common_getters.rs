@@ -7,6 +7,7 @@ use ambassador::delegatable_trait;
 use uuid::Uuid;
 use wm_common::ContainerDto;
 
+use super::TilingDirectionGetters;
 use crate::models::{
   Container, DirectionContainer, Monitor, TilingContainer,
   WindowContainer, Workspace,
@@ -116,9 +117,14 @@ pub trait CommonGetters {
   /// Children in order of last focus.
   fn child_focus_order(&self) -> Box<dyn Iterator<Item = Container> + '_> {
     let child_focus_order = self.borrow_child_focus_order();
+    let mut index = 0;
 
     Box::new(std::iter::from_fn(move || {
-      for child_id in child_focus_order.iter() {
+      // Resume from where the previous call left off, such that each
+      // child is yielded once.
+      while let Some(child_id) = child_focus_order.get(index) {
+        index += 1;
+
         if let Some(child) = self.child_by_id(child_id) {
           return Some(child);
         }
@@ -273,6 +279,33 @@ pub trait CommonGetters {
       .take_while(|ancestor| end_ancestor.as_ref() != Some(ancestor))
       .chain(end_ancestor.clone())
       .all(|ancestor| ancestor.focus_index() == 0)
+  }
+
+  /// Whether this container is hidden because it's in a tab that isn't
+  /// the active tab of a tabbed ancestor.
+  ///
+  /// Non-tiling containers (e.g. floating windows) are not part of any
+  /// tab and are therefore never hidden by tabs.
+  fn is_in_inactive_tab(&self) -> bool {
+    let mut child = self.as_container();
+
+    for ancestor in self.ancestors() {
+      if let Ok(direction_container) = ancestor.as_direction_container() {
+        let is_inactive_tab =
+          direction_container.active_tab().is_some_and(|active_tab| {
+            child.as_tiling_container().is_ok()
+              && active_tab.id() != child.id()
+          });
+
+        if is_inactive_tab {
+          return true;
+        }
+      }
+
+      child = ancestor;
+    }
+
+    false
   }
 }
 

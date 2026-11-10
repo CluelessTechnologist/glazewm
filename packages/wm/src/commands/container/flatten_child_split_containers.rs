@@ -1,3 +1,5 @@
+use wm_common::TilingLayout;
+
 use super::flatten_split_container;
 use crate::{
   models::Container,
@@ -12,11 +14,20 @@ use crate::{
 /// H[1 H[V[2, 3]]] -> H[1, 2, 3]
 /// H[1 H[2, 3]] -> H[1, 2, 3]
 /// H[V[1]] -> V[1]
+/// H[T[1, 2]] -> T[1, 2]
 /// ```
+///
+/// Tabbed containers are never merged into their parent, and the
+/// children of a tabbed container are left as-is, since each child is a
+/// separate tab.
 pub fn flatten_child_split_containers(
   parent: &Container,
 ) -> anyhow::Result<()> {
   if let Ok(parent) = parent.as_direction_container() {
+    if parent.tiling_layout() == TilingLayout::Tabbed {
+      return Ok(());
+    }
+
     // Get children that are either tiling windows or split containers.
     let tiling_children = parent
       .children()
@@ -28,8 +39,18 @@ pub fn flatten_child_split_containers(
       // Handle case where the parent is a split container and has a
       // single split container child.
       if let Some(split_child) = tiling_children[0].as_split() {
+        // The parent takes over the layout of a tabbed child. Otherwise,
+        // the child has the inverse tiling direction of the parent.
+        let (tiling_direction, tiling_layout) =
+          if split_child.tiling_layout() == TilingLayout::Tabbed {
+            (split_child.tiling_direction(), TilingLayout::Tabbed)
+          } else {
+            (parent.tiling_direction().inverse(), parent.tiling_layout())
+          };
+
         flatten_split_container(split_child.clone())?;
-        parent.set_tiling_direction(parent.tiling_direction().inverse());
+        parent.set_tiling_direction(tiling_direction);
+        parent.set_tiling_layout(tiling_layout);
       }
     } else {
       let split_children = tiling_children
@@ -39,12 +60,15 @@ pub fn flatten_child_split_containers(
 
       for split_child in split_children.iter().filter(|split_child| {
         split_child.tiling_direction() == parent.tiling_direction()
+          && split_child.tiling_layout() != TilingLayout::Tabbed
       }) {
         // Additionally flatten redundant top-level split containers in
         // the child.
         if split_child.child_count() == 1 {
           if let Some(split_grandchild) =
-            split_child.children()[0].as_split()
+            split_child.children()[0].as_split().filter(|grandchild| {
+              grandchild.tiling_layout() != TilingLayout::Tabbed
+            })
           {
             flatten_split_container(split_grandchild.clone())?;
           }

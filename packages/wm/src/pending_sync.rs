@@ -30,6 +30,10 @@ pub struct PendingSync {
   /// Whether to jump the cursor to the focused container (if enabled in
   /// user config).
   needs_cursor_jump: bool,
+
+  /// Whether tab bars should be updated without any other changes (e.g.
+  /// on a window title change).
+  needs_tab_bar_update: bool,
 }
 
 impl PendingSync {
@@ -40,6 +44,7 @@ impl PendingSync {
       || self.needs_focused_effect_update
       || self.needs_all_effects_update
       || self.needs_cursor_jump
+      || self.needs_tab_bar_update
   }
 
   pub fn clear(&mut self) -> &mut Self {
@@ -49,6 +54,7 @@ impl PendingSync {
     self.needs_focused_effect_update = false;
     self.needs_all_effects_update = false;
     self.needs_cursor_jump = false;
+    self.needs_tab_bar_update = false;
     self
   }
 
@@ -113,6 +119,11 @@ impl PendingSync {
 
   pub fn queue_cursor_jump(&mut self) -> &mut Self {
     self.needs_cursor_jump = true;
+    self
+  }
+
+  pub fn queue_tab_bar_update(&mut self) -> &mut Self {
+    self.needs_tab_bar_update = true;
     self
   }
 

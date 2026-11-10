@@ -41,6 +41,26 @@ pub trait TilingSizeGetters: CommonGetters {
     ))
   }
 
+  /// Gets the height of the tab bar in containers with the tabbed layout
+  /// in pixels.
+  fn tab_bar_height(&self) -> anyhow::Result<i32> {
+    let monitor = self.monitor().context("No monitor.")?;
+    let monitor_rect = monitor.native_properties().bounds;
+    let gaps_config = self.gaps_config();
+
+    let scale_factor = if gaps_config.scale_with_dpi {
+      monitor.native_properties().scale_factor
+    } else {
+      1.
+    };
+
+    Ok(
+      gaps_config
+        .tab_bar_height
+        .to_px(monitor_rect.height(), Some(scale_factor)),
+    )
+  }
+
   /// Gets the container to resize when resizing a tiling window.
   fn container_to_resize(
     &self,

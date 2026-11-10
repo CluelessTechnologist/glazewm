@@ -1,19 +1,29 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 #[cfg(target_os = "windows")]
 use wm_common::WindowEffectConfig;
 use wm_common::{
-  CursorJumpTrigger, DisplayState, HideCorner, HideMethod, UniqueExt,
-  WindowState, WmEvent,
+  CursorJumpTrigger, DisplayState, HideCorner, HideMethod,
+  TabColorsConfig, TilingLayout, UniqueExt, WindowState, WmEvent,
 };
 #[cfg(target_os = "windows")]
 use wm_platform::NativeWindowWindowsExt;
 #[cfg(target_os = "windows")]
 use wm_platform::{CornerStyle, OpacityValue};
-use wm_platform::{Rect, WindowZOrder};
+use wm_platform::{
+  Rect, Tab, TabBarStyle, TabColors, TabState, WindowZOrder,
+};
 
 use crate::{
-  models::{Container, WindowContainer},
-  traits::{CommonGetters, PositionGetters, WindowGetters},
+  models::{
+    Container, DirectionContainer, TilingContainer, WindowContainer,
+  },
+  tab_bars::TabBarContent,
+  traits::{
+    tab_bar_rect, CommonGetters, PositionGetters, TilingDirectionGetters,
+    TilingSizeGetters, WindowGetters,
+  },
   user_config::UserConfig,
   wm_state::WmState,
 };
@@ -24,6 +34,15 @@ pub fn platform_sync(
 ) -> anyhow::Result<()> {
   let focused_container =
     state.focused_container().context("No focused container.")?;
+
+  // Which tab is active depends on focus, so the tabs of any tabbed
+  // ancestors need to be shown/hidden on any change in focus.
+  if state.pending_sync.needs_focus_update()
+    || state.pending_sync.needs_focused_effect_update()
+    || !state.pending_sync.workspaces_to_reorder().is_empty()
+  {
+    queue_tab_redraws(&focused_container, state);
+  }
 
   if state.pending_sync.needs_focus_update() {
     sync_focus(&focused_container, state)?;
@@ -73,9 +92,149 @@ pub fn platform_sync(
     }
   }
 
+  if let Err(err) = sync_tab_bars(&focused_container, state, config) {
+    tracing::warn!("Failed to update tab bars: {}", err);
+  }
+
   state.pending_sync.clear();
 
   Ok(())
+}
+
+/// Queues a redraw for the tabs of any tabbed containers that the focused
+/// container is in.
+fn queue_tab_redraws(focused_container: &Container, state: &mut WmState) {
+  let tabbed_ancestors = focused_container
+    .ancestors()
+    .filter_map(|ancestor| ancestor.as_direction_container().ok())
+    .filter(|ancestor| ancestor.tiling_layout() == TilingLayout::Tabbed)
+    .collect::<Vec<_>>();
+
+  for tabbed_ancestor in tabbed_ancestors {
+    state
+      .pending_sync
+      .queue_containers_to_redraw(tabbed_ancestor.tiling_children());
+  }
+}
+
+/// Shows, hides, and redraws the tab bars of all containers with the
+/// tabbed layout.
+fn sync_tab_bars(
+  focused_container: &Container,
+  state: &mut WmState,
+  config: &UserConfig,
+) -> anyhow::Result<()> {
+  let desired = state
+    .root_container
+    .descendants()
+    .filter_map(|container| container.as_direction_container().ok())
+    .filter(|container| container.tiling_layout() == TilingLayout::Tabbed)
+    .map(|container| {
+      let content =
+        tab_bar_content(&container, focused_container, config)?;
+      anyhow::Ok((container.id(), content))
+    })
+    .try_collect::<HashMap<_, _>>()?;
+
+  state.tab_bars.sync(desired, &state.dispatcher)
+}
+
+/// Gets what the tab bar of a tabbed container should show.
+///
+/// Returns `None` if the tab bar should be hidden, which is the case if
+/// the container is not visible or has no tabs.
+fn tab_bar_content(
+  container: &DirectionContainer,
+  focused_container: &Container,
+  config: &UserConfig,
+) -> anyhow::Result<Option<TabBarContent>> {
+  let workspace = container.workspace().context("No workspace.")?;
+  let tabs = container.tiling_children().collect::<Vec<_>>();
+
+  let Some(first_tab) = tabs.first() else {
+    return Ok(None);
+  };
+
+  if !workspace.is_displayed() || container.is_in_inactive_tab() {
+    return Ok(None);
+  }
+
+  let rect =
+    tab_bar_rect(&container.to_rect()?, first_tab.tab_bar_height()?);
+  let active_tab_id = container.active_tab().map(|tab| tab.id());
+
+  let tabs = tabs
+    .iter()
+    .map(|tab| {
+      let state = if Some(tab.id()) != active_tab_id {
+        TabState::Unfocused
+      } else if focused_container
+        .self_and_ancestors()
+        .any(|ancestor| ancestor.id() == tab.id())
+      {
+        TabState::Focused
+      } else {
+        TabState::FocusedInactive
+      };
+
+      Tab {
+        title: tab_title(tab),
+        state,
+      }
+    })
+    .collect();
+
+  let tab_bar_config = &config.value.tab_bar;
+  let scale_factor = if config.value.gaps.scale_with_dpi {
+    container
+      .monitor()
+      .context("No monitor.")?
+      .native_properties()
+      .scale_factor
+  } else {
+    1.
+  };
+
+  let to_colors = |colors: &TabColorsConfig| TabColors {
+    background: colors.background.clone(),
+    border: colors.border.clone(),
+    text: colors.text.clone(),
+  };
+
+  let style = TabBarStyle {
+    font_family: tab_bar_config.font_family.clone(),
+    font_size: tab_bar_config
+      .font_size
+      .to_px(rect.height(), Some(scale_factor)),
+    focused: to_colors(&tab_bar_config.focused),
+    focused_inactive: to_colors(&tab_bar_config.focused_inactive),
+    unfocused: to_colors(&tab_bar_config.unfocused),
+  };
+
+  Ok(Some(TabBarContent { rect, tabs, style }))
+}
+
+/// Gets the title to show for a tab.
+///
+/// For a split container, this is the title of its most recently focused
+/// window. Falls back to the process name for windows without a title.
+fn tab_title(tab: &TilingContainer) -> String {
+  let window = match tab {
+    TilingContainer::TilingWindow(window) => Some(window.clone().into()),
+    TilingContainer::Split(split) => split
+      .descendant_focus_order()
+      .find_map(|descendant| descendant.as_window_container().ok()),
+  };
+
+  window.map_or_else(String::new, |window: WindowContainer| {
+    let properties = window.native_properties();
+
+    if properties.title.is_empty() {
+      properties.process_name
+    } else {
+      properties.title
+    }
+  })
 }
 
 fn sync_focus(
@@ -267,9 +426,13 @@ fn redraw_containers(
     }
 
     // Transition display state depending on whether window will be
-    // shown or hidden.
+    // shown or hidden. Windows in inactive tabs are hidden the same way
+    // as windows on hidden workspaces.
+    let should_show =
+      workspace.is_displayed() && !window.is_in_inactive_tab();
+
     window.set_display_state(
-      match (window.display_state(), workspace.is_displayed()) {
+      match (window.display_state(), should_show) {
         (DisplayState::Hidden | DisplayState::Hiding, true) => {
           DisplayState::Showing
         }

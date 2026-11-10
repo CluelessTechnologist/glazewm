@@ -54,6 +54,33 @@ gaps:
     bottom: '20px'
     left: '20px'
 
+  # Height of the tab bar shown above containers with the tabbed layout.
+  tab_bar_height: '24px'
+
+# Appearance of the tab bar shown above containers with the tabbed layout.
+# ** Tab bars are currently only drawn on Windows.
+tab_bar:
+  font_family: 'Segoe UI'
+  font_size: '13px'
+
+  # Active tab of the container that has focus.
+  focused:
+    background: '#285577'
+    border: '#4c7899'
+    text: '#ffffff'
+
+  # Active tab of a container that doesn't have focus.
+  focused_inactive:
+    background: '#5f676a'
+    border: '#333333'
+    text: '#ffffff'
+
+  # Tabs that aren't active.
+  unfocused:
+    background: '#222222'
+    border: '#333333'
+    text: '#888888'
+
 window_effects:
   # Visual effects to apply to the focused window.
   focused_window:
@@ -220,6 +247,16 @@ keybindings:
   # be inserted.
   - commands: ['toggle-tiling-direction']
     bindings: ['alt+v']
+
+  # Show the windows of the focused window's container as tabs, where only
+  # the active tab is visible. Focus or move left/right to switch between
+  # and reorder tabs. Also available as `toggle-tiling-layout`.
+  - commands: ['set-tiling-layout tabbed']
+    bindings: ['alt+w']
+
+  # Change the focused window's container back to being tiled.
+  - commands: ['set-tiling-layout tiles']
+    bindings: ['alt+e']
 
   # Change focus from tiling windows -> floating -> fullscreen.
   - commands: ['wm-cycle-focus']

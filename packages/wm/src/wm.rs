@@ -11,14 +11,15 @@ use wm_common::{
 #[cfg(target_os = "windows")]
 use wm_platform::NativeWindowWindowsExt;
 use wm_platform::{
-  Dispatcher, LengthValue, PlatformEvent, RectDelta, WindowEvent,
+  Dispatcher, LengthValue, PlatformEvent, RectDelta, TabBarEvent,
+  WindowEvent,
 };
 
 use crate::{
   commands::{
     container::{
       focus_container_by_id, focus_in_direction, set_tiling_direction,
-      toggle_tiling_direction,
+      set_tiling_layout, toggle_tiling_direction, toggle_tiling_layout,
     },
     general::{
       cycle_focus, disable_binding_mode, enable_binding_mode,
@@ -52,6 +53,7 @@ use crate::{
 pub struct WindowManager {
   pub event_rx: mpsc::UnboundedReceiver<WmEvent>,
   pub exit_rx: mpsc::UnboundedReceiver<()>,
+  pub tab_bar_event_rx: mpsc::UnboundedReceiver<TabBarEvent>,
   pub state: WmState,
 }
 
@@ -62,15 +64,60 @@ impl WindowManager {
   ) -> anyhow::Result<Self> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (exit_tx, exit_rx) = mpsc::unbounded_channel();
+    let (tab_bar_event_tx, tab_bar_event_rx) = mpsc::unbounded_channel();
 
-    let mut state = WmState::new(dispatcher, event_tx, exit_tx);
+    let mut state =
+      WmState::new(dispatcher, event_tx, exit_tx, tab_bar_event_tx);
     state.populate(config)?;
 
     Ok(Self {
       event_rx,
       exit_rx,
+      tab_bar_event_rx,
       state,
     })
+  }
+
+  /// Handles user interaction with a tab bar.
+  ///
+  /// Clicking a tab focuses the most recently focused window within it.
+  pub fn process_tab_bar_event(
+    &mut self,
+    event: &TabBarEvent,
+    config: &mut UserConfig,
+  ) -> anyhow::Result<()> {
+    let state = &mut self.state;
+
+    if state.is_paused {
+      return Ok(());
+    }
+
+    match event {
+      TabBarEvent::TabClicked {
+        tab_bar_id,
+        tab_index,
+      } => {
+        // The container might have been removed since the click.
+        let tab = state
+          .tab_bars
+          .container_id(*tab_bar_id)
+          .and_then(|container_id| state.container_by_id(container_id))
+          .and_then(|container| container.as_direction_container().ok())
+          .and_then(|container| {
+            container.tiling_children().nth(*tab_index)
+          });
+
+        if let Some(tab) = tab {
+          focus_container_by_id(&tab.id(), state)?;
+        }
+      }
+    }
+
+    if state.pending_sync.has_changes() {
+      platform_sync(state, config)?;
+    }
+
+    Ok(())
   }
 
   pub fn process_event(
@@ -743,6 +790,12 @@ impl WindowManager {
           tiling_direction,
         )
       }
+      InvokeCommand::ToggleTilingLayout => {
+        toggle_tiling_layout(&subject_container, state)
+      }
+      InvokeCommand::SetTilingLayout { tiling_layout } => {
+        set_tiling_layout(&subject_container, tiling_layout, state)
+      }
       InvokeCommand::WmCycleFocus {
         omit_floating,
         omit_fullscreen,
@@ -811,5 +864,8 @@ impl WindowManager {
         tracing::warn!("{:?}", err);
       }
     }
+
+    // Destroy tab bars while the event loop is still running.
+    self.state.tab_bars.clear();
   }
 }
