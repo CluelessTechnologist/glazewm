@@ -3,7 +3,7 @@
 >
 > Changes in this fork (since November 2026):
 >
-> - A sway-style **tabbed layout**: `set-tiling-layout <tiles|tabbed>` and `toggle-tiling-layout` commands, with a configurable `tab_bar`. See `resources/assets/sample-config.yaml`.
+> - A sway-style **tabbed layout**: `set-tiling-layout <tiles|tabbed>` and `toggle-tiling-layout` commands, with a configurable `tab_bar`. New workspaces can start tabbed (`general.default_tiling_layout`), and tab titles can be left- or center-aligned (`tab_bar.text_align`). See `resources/assets/sample-config.yaml`.
 >
 > Branches: `fork` (default) is what gets built and released, `feat/tabbed-layout` holds only the feature commit, and `main` mirrors upstream unchanged. [Releases](../../releases) are unsigned x64 portable zips built by `.github/workflows/fork-release.yaml`, with UIAccess off. Upstream's own workflows are not run here.
 >
