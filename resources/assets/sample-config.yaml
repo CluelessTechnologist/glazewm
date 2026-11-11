@@ -18,6 +18,10 @@ general:
   # workspace when focusing the current workspace.
   toggle_workspace_on_refocus: false
 
+  # Layout of newly created workspaces: 'tiles' or 'tabbed' (like Sway's
+  # `workspace_layout`).
+  default_tiling_layout: 'tiles'
+
   cursor_jump:
     # Whether to automatically move the cursor on the specified trigger.
     enabled: true
@@ -62,6 +66,9 @@ gaps:
 tab_bar:
   font_family: 'Segoe UI'
   font_size: '13px'
+
+  # Alignment of the tab titles: 'left' or 'center'.
+  text_align: 'left'
 
   # Active tab of the container that has focus.
   focused:

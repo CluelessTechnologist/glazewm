@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use wm_platform::{
   Color, CornerStyle, Key, Keybinding, LengthValue, OpacityValue,
-  RectDelta,
+  RectDelta, TabTextAlign,
 };
 
-use crate::app_command::InvokeCommand;
+use crate::{app_command::InvokeCommand, TilingLayout};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, rename_all(serialize = "camelCase"))]
@@ -101,6 +101,10 @@ pub struct GeneralConfig {
 
   /// Affects which windows get shown in the native Windows taskbar.
   pub show_all_in_taskbar: bool,
+
+  /// Layout of newly created workspaces, like Sway/i3's
+  /// `workspace_layout`.
+  pub default_tiling_layout: TilingLayout,
 }
 
 impl Default for GeneralConfig {
@@ -123,6 +127,7 @@ impl Default for GeneralConfig {
         }
       },
       show_all_in_taskbar: false,
+      default_tiling_layout: TilingLayout::default(),
     }
   }
 }
@@ -242,6 +247,9 @@ pub struct TabBarConfig {
   /// Font size of the tab titles.
   pub font_size: LengthValue,
 
+  /// Horizontal alignment of the tab titles.
+  pub text_align: TabTextAlign,
+
   /// Colors of the active tab in the focused container.
   pub focused: TabColorsConfig,
 
@@ -258,6 +266,7 @@ impl Default for TabBarConfig {
     TabBarConfig {
       font_family: "Segoe UI".to_string(),
       font_size: LengthValue::from_px(13),
+      text_align: TabTextAlign::default(),
       focused: TabColorsConfig::from_hex("#285577", "#4c7899", "#ffffff"),
       focused_inactive: TabColorsConfig::from_hex(
         "#5f676a", "#333333", "#ffffff",

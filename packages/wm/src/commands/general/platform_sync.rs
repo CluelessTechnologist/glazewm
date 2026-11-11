@@ -206,6 +206,7 @@ fn tab_bar_content(
     font_size: tab_bar_config
       .font_size
       .to_px(rect.height(), Some(scale_factor)),
+    text_align: tab_bar_config.text_align.clone(),
     focused: to_colors(&tab_bar_config.focused),
     focused_inactive: to_colors(&tab_bar_config.focused_inactive),
     unfocused: to_colors(&tab_bar_config.unfocused),
