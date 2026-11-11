@@ -1,12 +1,12 @@
 use anyhow::Context;
 use tracing::info;
-use wm_common::{TilingDirection, WmEvent, WorkspaceConfig};
+use wm_common::{TilingDirection, TilingLayout, WmEvent, WorkspaceConfig};
 
 use super::sort_workspaces;
 use crate::{
   commands::container::attach_container,
   models::{Monitor, Workspace},
-  traits::{CommonGetters, PositionGetters},
+  traits::{CommonGetters, PositionGetters, TilingDirectionGetters},
   user_config::UserConfig,
   wm_state::WmState,
 };
@@ -51,7 +51,12 @@ pub fn activate_workspace(
 
   let monitor_rect = target_monitor.to_rect()?;
 
-  let tiling_direction = if monitor_rect.height() > monitor_rect.width() {
+  let tiling_layout = config.value.general.default_tiling_layout.clone();
+
+  // Tabbed containers are always horizontal (see `update_tiling_layout`).
+  let tiling_direction = if tiling_layout == TilingLayout::Tabbed {
+    TilingDirection::Horizontal
+  } else if monitor_rect.height() > monitor_rect.width() {
     TilingDirection::Vertical
   } else {
     TilingDirection::Horizontal
@@ -62,6 +67,7 @@ pub fn activate_workspace(
     config.value.gaps.clone(),
     tiling_direction,
   );
+  workspace.set_tiling_layout(tiling_layout);
 
   // Attach the created workspace to the specified monitor.
   attach_container(

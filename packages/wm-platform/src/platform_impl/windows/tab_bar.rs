@@ -10,8 +10,8 @@ use windows::{
       CreateFontIndirectW, CreateSolidBrush, DeleteDC, DeleteObject,
       DrawTextW, EndPaint, FillRect, InvalidateRect, SelectObject,
       SetBkMode, SetTextColor, CLEARTYPE_QUALITY, DT_CENTER,
-      DT_END_ELLIPSIS, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, HDC,
-      HGDIOBJ, LOGFONTW, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
+      DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER,
+      HDC, HGDIOBJ, LOGFONTW, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
     },
     System::LibraryLoader::GetModuleHandleW,
     UI::WindowsAndMessaging::{
@@ -27,6 +27,7 @@ use windows::{
 
 use crate::{
   Color, Dispatcher, Rect, Tab, TabBarEvent, TabBarId, TabBarStyle,
+  TabTextAlign,
 };
 
 /// Window class name of tab bar windows.
@@ -391,17 +392,18 @@ unsafe fn draw_tabs(
       bottom: tab_rect.bottom,
     };
 
+    let align = match style.text_align {
+      TabTextAlign::Left => DT_LEFT,
+      TabTextAlign::Center => DT_CENTER,
+    };
+
     let mut title = tab.title.encode_utf16().collect::<Vec<_>>();
     SetTextColor(hdc, COLORREF(colors.text.to_bgr()));
     DrawTextW(
       hdc,
       &mut title,
       &raw mut text_rect,
-      DT_CENTER
-        | DT_VCENTER
-        | DT_SINGLELINE
-        | DT_END_ELLIPSIS
-        | DT_NOPREFIX,
+      align | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX,
     );
   }
 

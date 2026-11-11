@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::{platform_impl, Color, Dispatcher, Rect};
@@ -41,6 +42,16 @@ pub struct TabColors {
   pub text: Color,
 }
 
+/// Horizontal alignment of the titles within their tabs.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TabTextAlign {
+  /// Like Sway/i3's default `title_align left`.
+  #[default]
+  Left,
+  Center,
+}
+
 /// Appearance of a [`TabBar`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TabBarStyle {
@@ -49,6 +60,9 @@ pub struct TabBarStyle {
 
   /// Font size of the tab titles in physical pixels.
   pub font_size: i32,
+
+  /// Horizontal alignment of the tab titles.
+  pub text_align: TabTextAlign,
 
   /// Colors for [`TabState::Focused`].
   pub focused: TabColors,
